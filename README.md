@@ -6,7 +6,8 @@
 #### Step 3 : Run `kubectl apply -f kubernetes/database-ns` to deploy kubernetes services and deployments.
 #### Step 4 : Verify if the database pods are running by running the command `kubectl get pods -n database`.
 
-## Database commands:
+
+## Database command examples:
 #### Add record : 
 ```
 curl -X POST -H "Content-Type: application/json" -d '{"key": "1", "record": {"name": "Alice", "age": 25}}' http://127.0.0.1:5000/records
