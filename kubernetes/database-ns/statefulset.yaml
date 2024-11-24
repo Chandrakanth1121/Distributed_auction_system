@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: database-server
+  namespace: database
+spec:
+  replicas: 3
+  serviceName: database-server
+  selector:
+    matchLabels:
+      app: database-server
+  template:
+    metadata:
+      labels:
+        app: database-server
+    spec:
+      containers:
+      - name: database-server
+        image: chandrakanthchalla11/database-image:v1.0.14
+        ports:
+        - containerPort: 5000
+        env:
+        - name: OTHER_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: database-server-config
+              key: servers
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+

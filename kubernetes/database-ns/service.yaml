@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: database-service-external
+  namespace: database
+spec:
+  selector:
+    app: database-server
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: database-server
+  namespace: database
+spec:
+  selector:
+    app: database-server
+  ports:
+  - protocol: TCP
+    port: 5000
+    targetPort: 5000
+  clusterIP: None  # Headless service for direct pod-to-pod communication
