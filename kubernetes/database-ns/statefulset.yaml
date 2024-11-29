@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: database-server
-        image: chandrakanthchalla11/database-image:v2.0.34
+        image: chandrakanthchalla11/database-image:v2.0.45
         ports:
         - containerPort: 5000
         env:

@@ -31,6 +31,18 @@ read_retry_timeout = 30  # Time limit for retrying read requests
 
 last_heartbeat = time.time();
 
+# Synchronize with leader during startup
+leader_ip = leader_election.get_leader(start_time)
+while not leader_ip:
+    print("waiting for leader election")
+    sleep(2)
+
+if leader_ip != SERVER_IP:
+    logger.info(f"Synchronizing data with leader {leader_ip}...")
+    database.synchronize_with_leader(leader_ip)
+else:
+    logger.info("No synchronization needed, this server is the leader.")
+
 # Periodic heartbeat from the leader
 def send_heartbeat():
     while True:
@@ -78,18 +90,22 @@ def handle_write():
     global write_in_progress
     global start_time
     leader_ip = leader_election.get_leader(start_time)
-    if leader_ip != SERVER_IP:
-        # Redirect write request to the leader
-        return redirect(f"http://{leader_ip}:5000/write", code=307)
-
     data = request.json
     key, value = data["key"], data["value"]
 
-    # Begin write operation
+    if leader_ip != SERVER_IP:
+        # Redirect write request to the leader
+        try:
+            response = requests.post(f"http://{leader_ip}:5000/write", json={"key": key, "value": value}, timeout=2)
+            response.raise_for_status()  # Ensure the request was successful
+            return response.json(), response.status_code
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to forward write to leader {leader_ip}: {e}")
+            return jsonify({"error": "Failed to forward write request to the leader"}), 500
+    # Begin write operation if this node is the leader
     write_in_progress = True
-    database.write_record(key, value)
+    database.write_record(key, value, leader_ip)
     write_in_progress = False  # Write operation completed
-
     return jsonify({"message": "Write successful"}), 200
 
 @app.route('/read/<key>', methods=['GET'])
@@ -102,7 +118,7 @@ def handle_read(key):
 
     while time.time() - st_time < timeout:
         try:
-            response = requests.get(f"http://{leader_ip}/lock_status", timeout=2)
+            response = requests.get(f"http://{leader_ip}:5000/lock_status", timeout=2)
             if response.status_code == 200:
                 lock_status = response.json().get("write_in_progress", False)
                 if not lock_status:  # Leader is not locked
@@ -128,7 +144,8 @@ def handle_read(key):
 def handle_replication():
     data = request.json
     key, value = data["key"], data["value"]
-    database.write_record(key, value)  # Direct replication without locking
+    leader_ip = leader_election.get_leader(start_time)
+    database.write_record(key, value, leader_ip)  # Direct replication without locking
     return jsonify({"message": "Replication successful"}), 200
 
 @app.route('/new_leader', methods=['POST'])
@@ -160,6 +177,10 @@ def handle_election():
 def liveness_probe():
     uptime = time.time() - start_time
     return jsonify({"message": "endpoint is live", "uptime": uptime}), 200
+
+@app.route('/data', methods=['GET'])
+def handle_data_request():
+    return jsonify(database.get_all_records()), 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
