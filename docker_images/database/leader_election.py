@@ -23,28 +23,6 @@ class LeaderElection:
         self.leader_ip = None
         self.uptime = get_uptime(start_time)
 
-    # def start_election(self):
-    #     logger.info(f"Server {self.server_ip} starting election with uptime {self.uptime}")
-    #     self.leader_ip = self.server_ip
-    #     for peer in self.peers:
-    #         if peer != f"{SERVER_ID}":
-    #             try:
-    #                 response = requests.get(f"http://{peer}.database-server.database.svc.cluster.local:5000/election", timeout=2)
-    #                 response.raise_for_status()
-    #                 logger.info(response.status_code)
-    #                 if response.status_code == 200:
-    #                     peer_info = response.json()
-    #                     # Compare uptime first
-    #                     if peer_info["uptime"] > self.uptime:
-    #                         self.leader_ip = peer_info["ip"]
-    #                     # Tie-breaking based on IP address (lexicographical order)
-    #                     elif peer_info["uptime"] == self.uptime and peer_info["ip"] < self.server_ip:
-    #                         self.leader_ip = peer_info["ip"]
-    #             except requests.exceptions.Timeout:
-    #                 logger.info(f"Timeout while contacting peer {peer}")
-    #     logger.info(f"Elected leader: {self.leader_ip}")
-    #     self.broadcast_leader()
-
     def start_election(self,start_time):
         self.uptime = get_uptime(start_time)
         logger.debug(f"Server {self.server_ip} starting election with uptime {self.uptime}")
@@ -61,12 +39,6 @@ class LeaderElection:
                     logger.info(f"Received response: {response.status_code}")
                     if response.status_code == 200:
                         peer_info = response.json()
-                        # if peer_info["uptime"] > highest_uptime:
-                        #     self.leader_ip = peer_info["ip"]
-                        #     highest_uptime = peer_info["uptime"]
-                        #     logger.info(f"Found node with higher uptime")
-                        # elif peer_info["uptime"] == highest_uptime and peer_info["ip"] > self.server_ip:
-                        #     self.leader_ip = peer_info["ip"]
                         if peer_info["uptime"] > max_uptime or (
                                                 peer_info["uptime"] == max_uptime and ip_address(peer_info["ip"]) > ip_address(max_uptime_ip)
                                             ):

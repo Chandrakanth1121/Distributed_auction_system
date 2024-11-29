@@ -22,20 +22,20 @@ SERVER_ID = os.getenv("MY_POD_NAME")
 PEERS = os.getenv("PEERS").split(",")
 SERVER_IP = socket.gethostbyname(socket.gethostname())
 
-leader_election = LeaderElection(PEERS,start_time)
+leader_election = LeaderElection(PEERS, start_time)
 database = Database(PEERS)
 
 heartbeat_timeout = 15  # Timeout for heartbeat (in seconds)
 write_in_progress = False  # Flag for write operation status
 read_retry_timeout = 30  # Time limit for retrying read requests
 
-last_heartbeat = time.time();
+last_heartbeat = time.time()
 
 # Synchronize with leader during startup
 leader_ip = leader_election.get_leader(start_time)
 while not leader_ip:
     print("waiting for leader election")
-    sleep(2)
+    time.sleep(2)
 
 if leader_ip != SERVER_IP:
     logger.info(f"Synchronizing data with leader {leader_ip}...")
@@ -61,7 +61,7 @@ def send_heartbeat():
                         logger.info(f"Request error while sending heartbeat to peer {peer}: {e}")
                     except Exception as e:
                         logger.info(f"Unexpected error while sending heartbeat to peer {peer}: {e}")
-        time.sleep(5)  # Send heartbeat every 10 seconds
+        time.sleep(5)  # Send heartbeat every 5 seconds
 
 # Start the heartbeat thread
 heartbeat_thread = threading.Thread(target=send_heartbeat)
@@ -78,7 +78,7 @@ def monitor_heartbeat():
             if time.time() - last_heartbeat > heartbeat_timeout and leader_election.get_leader(start_time) != SERVER_IP:
                 logger.info("Leader failed, starting election...")
                 leader_election.start_election(start_time)  # Trigger leader election
-        time.sleep(10)  # Check every 5 seconds for heartbeat
+        time.sleep(10)  # Check every 10 seconds for heartbeat
 
 # Start the heartbeat monitoring thread
 monitor_thread = threading.Thread(target=monitor_heartbeat)
@@ -91,28 +91,93 @@ def handle_write():
     global start_time
     leader_ip = leader_election.get_leader(start_time)
     data = request.json
-    key, value = data["key"], data["value"]
+    key = data["key"]
+    value = data["value"]
+    db_type = data["db_type"]  # Specify which database to write to: "users" or "bids"
 
     if leader_ip != SERVER_IP:
-        # Redirect write request to the leader
         try:
-            response = requests.post(f"http://{leader_ip}:5000/write", json={"key": key, "value": value}, timeout=2)
-            response.raise_for_status()  # Ensure the request was successful
+            response = requests.post(
+                f"http://{leader_ip}:5000/write",
+                json={"key": key, "value": value, "db_type": db_type},
+                timeout=2
+            )
+            response.raise_for_status()
             return response.json(), response.status_code
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to forward write to leader {leader_ip}: {e}")
             return jsonify({"error": "Failed to forward write request to the leader"}), 500
+
     # Begin write operation if this node is the leader
     write_in_progress = True
-    database.write_record(key, value, leader_ip)
-    write_in_progress = False  # Write operation completed
-    return jsonify({"message": "Write successful"}), 200
+    database.write_record(key, value, leader_ip, db_type)
+    write_in_progress = False
+    return jsonify({"message": f"Write successful to {db_type} database"}), 200
 
-@app.route('/read/<key>', methods=['GET'])
-def handle_read(key):
+@app.route('/add_user', methods=['POST'])
+def add_user():
+    global write_in_progress
+    global start_time
+    data = request.json
+    username = data["username"]
+    password = data["password"]
+
+    leader_ip = leader_election.get_leader(start_time)
+    
+    if leader_ip != SERVER_IP:
+        # Redirect request to the leader
+        try:
+            response = requests.post(
+                f"http://{leader_ip}:5000/add_user",
+                json={"username": username, "password": password},
+                timeout=2
+            )
+            response.raise_for_status()
+            return response.json(), response.status_code
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to forward add_user request to leader {leader_ip}: {e}")
+            return jsonify({"error": "Failed to forward request to the leader"}), 500
+    
+    # Handle user creation if this is the leader
+    write_in_progress = True
+    if database.add_user(username, password, leader_ip):
+        write_in_progress = False
+        return jsonify({"message": f"User {username} added successfully."}), 200
+    write_in_progress = False
+    return jsonify({"error": f"User {username} already exists."}), 400
+
+
+@app.route('/read/<db_type>/<key>', methods=['GET'])
+def handle_read(db_type, key):
     global start_time
     leader_ip = leader_election.get_leader(start_time)
-    # Check leader's lock status
+    timeout = 30
+    st_time = time.time()
+
+    while time.time() - st_time < timeout:
+        try:
+            response = requests.get(f"http://{leader_ip}:5000/lock_status", timeout=2)
+            if response.status_code == 200:
+                lock_status = response.json().get("write_in_progress", False)
+                if not lock_status:
+                    value = database.read_record(key, db_type)
+                    if value is None:
+                        return jsonify({"error": "Record not found"}), 404
+                    return jsonify({"key": key, "value": value}), 200
+        except requests.exceptions.RequestException as e:
+            logger.info(f"Failed to contact leader: {e}")
+        time.sleep(2)
+
+    return jsonify({"error": "Read request timed out"}), 503
+
+@app.route('/authenticate_user', methods=['POST'])
+def authenticate_user():
+    global start_time
+    data = request.json
+    username = data["username"]
+    password = data["password"]
+
+    leader_ip = leader_election.get_leader(start_time)
     timeout = 30  # Maximum wait time in seconds
     st_time = time.time()
 
@@ -122,30 +187,23 @@ def handle_read(key):
             if response.status_code == 200:
                 lock_status = response.json().get("write_in_progress", False)
                 if not lock_status:  # Leader is not locked
-                    value = database.read_record(key)
-                    if value is None:
-                        return jsonify({"error": "Record not found"}), 404
-                    return jsonify({"key": key, "value": value}), 200
-        except requests.exceptions.Timeout as e:
-            logger.info(f"Failed to contact leader: {e}")
-        except requests.exceptions.ConnectionError as e:
-            logger.info(f"Failed to contact leader: {e}")
+                    if database.authenticate_user(username, password):
+                        return jsonify({"message": "Authentication successful."}), 200
+                    return jsonify({"error": "Invalid username or password."}), 401
         except requests.exceptions.RequestException as e:
             logger.info(f"Failed to contact leader: {e}")
-        except Exception as e:
-            logger.info(f"Failed to contact leader: {e}")
-        # Wait before retrying
         time.sleep(2)
-
-    return jsonify({"error": "Read request timed out"}), 503
+    return jsonify({"error": "Authentication request timed out"}), 503
 
 
 @app.route('/replicate', methods=['POST'])
 def handle_replication():
     data = request.json
-    key, value = data["key"], data["value"]
+    key = data["key"]
+    value = data["value"]
+    db_type = data["db_type"]
     leader_ip = leader_election.get_leader(start_time)
-    database.write_record(key, value, leader_ip)  # Direct replication without locking
+    database.write_record(key, value, leader_ip, db_type)
     return jsonify({"message": "Replication successful"}), 200
 
 @app.route('/new_leader', methods=['POST'])
