@@ -16,11 +16,11 @@ spec:
     spec:
       containers:
       - name: database-server
-        image: chandrakanthchalla11/database-image:v1.0.14
+        image: chandrakanthchalla11/database-image:v2.0.34
         ports:
         - containerPort: 5000
         env:
-        - name: OTHER_SERVERS
+        - name: PEERS
           valueFrom:
             configMapKeyRef:
               name: database-server-config
@@ -29,4 +29,12 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
+        readinessProbe:
+          httpGet:
+            path: /liveness
+            port: 5000
+          initialDelaySeconds: 5  # Delay before the probe starts
+          periodSeconds: 10       # Frequency of the probe
+          timeoutSeconds: 5       # Timeout for each probe
+          failureThreshold: 3     # Number of failures before marking "not ready"
 

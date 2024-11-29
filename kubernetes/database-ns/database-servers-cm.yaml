@@ -4,4 +4,4 @@ metadata:
   name: database-server-config
   namespace: database
 data:
-  servers: http://database-server-0.database-server.database.svc.cluster.local:5000,http://database-server-1.database-server.database.svc.cluster.local:5000,http://database-server-2.database-server.database.svc.cluster.local:5000
+  servers: database-server-0,database-server-1,database-server-2
