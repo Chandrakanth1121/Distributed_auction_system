@@ -35,7 +35,7 @@ class LeaderElection:
             if peer != f"{SERVER_ID}":
                 logger.debug(f"Attempting to contact peer: {peer}")
                 try:
-                    response = requests.get(f"http://{peer}.database-server.database.svc.cluster.local:5000/election", timeout=20)
+                    response = requests.get(f"http://{peer}.database-server.database.svc.cluster.local:5001/election", timeout=20)
                     logger.info(f"Received response: {response.status_code}")
                     if response.status_code == 200:
                         peer_info = response.json()
@@ -64,7 +64,7 @@ class LeaderElection:
             if peer != f"{SERVER_ID}":
                 try:
                     logger.info("broadcast")
-                    requests.post(f"http://{peer}.database-server.database.svc.cluster.local:5000/new_leader", json={"leader_ip": self.leader_ip}, timeout=5)
+                    requests.post(f"http://{peer}.database-server.database.svc.cluster.local:5001/new_leader", json={"leader_ip": self.leader_ip}, timeout=5)
                     logger.info(f"Notified {peer} about new leader: {self.leader_ip}")
                 except requests.exceptions.Timeout as e:
                     logger.info(f"Failed to notify {peer} about new leader")

@@ -50,7 +50,7 @@ def send_heartbeat():
             for peer in PEERS:
                 if peer != f"{SERVER_ID}" and leader_election.get_leader(start_time) == SERVER_IP:
                     try:
-                        response = requests.post(f"http://{peer}.database-server.database.svc.cluster.local:5000/heartbeat", timeout=2)
+                        response = requests.post(f"http://{peer}.database-server.database.svc.cluster.local:5001/heartbeat", timeout=2)
                         if response.status_code == 200:
                             logger.info(f"Sent heartbeat to {peer}")
                     except requests.exceptions.Timeout as e:
@@ -98,7 +98,7 @@ def handle_write():
     if leader_ip != SERVER_IP:
         try:
             response = requests.post(
-                f"http://{leader_ip}:5000/write",
+                f"http://{leader_ip}:5001/write",
                 json={"key": key, "value": value, "db_type": db_type},
                 timeout=2
             )
@@ -128,7 +128,7 @@ def add_user():
         # Redirect request to the leader
         try:
             response = requests.post(
-                f"http://{leader_ip}:5000/add_user",
+                f"http://{leader_ip}:5001/add_user",
                 json={"username": username, "password": password},
                 timeout=2
             )
@@ -156,7 +156,7 @@ def handle_read(db_type, key):
 
     while time.time() - st_time < timeout:
         try:
-            response = requests.get(f"http://{leader_ip}:5000/lock_status", timeout=2)
+            response = requests.get(f"http://{leader_ip}:5001/lock_status", timeout=2)
             if response.status_code == 200:
                 lock_status = response.json().get("write_in_progress", False)
                 if not lock_status:
@@ -183,7 +183,7 @@ def authenticate_user():
 
     while time.time() - st_time < timeout:
         try:
-            response = requests.get(f"http://{leader_ip}:5000/lock_status", timeout=2)
+            response = requests.get(f"http://{leader_ip}:5001/lock_status", timeout=2)
             if response.status_code == 200:
                 lock_status = response.json().get("write_in_progress", False)
                 if not lock_status:  # Leader is not locked
@@ -241,4 +241,4 @@ def handle_data_request():
     return jsonify(database.get_all_records()), 200
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5001)

@@ -67,7 +67,7 @@ class Database:
     def synchronize_with_leader(self, leader_ip):
         """Synchronize both user and bid databases with the leader."""
         try:
-            response = requests.get(f"http://{leader_ip}:5000/data", timeout=5)
+            response = requests.get(f"http://{leader_ip}:5001/data", timeout=5)
             response.raise_for_status()
             leader_data = response.json()
 
@@ -94,7 +94,7 @@ class Database:
             if peer != f"{SERVER_ID}":
                 try:
                     requests.post(
-                        f"http://{peer}.database-server.database.svc.cluster.local:5000/replicate",
+                        f"http://{peer}.database-server.database.svc.cluster.local:5001/replicate",
                         json={"key": key, "value": value, "db_type": db_type},
                         timeout=2
                     )

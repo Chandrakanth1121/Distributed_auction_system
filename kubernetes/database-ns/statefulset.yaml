@@ -16,9 +16,9 @@ spec:
     spec:
       containers:
       - name: database-server
-        image: chandrakanthchalla11/database-image:v2.0.49
+        image: chandrakanthchalla11/database-image:v3.0.0
         ports:
-        - containerPort: 5000
+        - containerPort: 5001
         env:
         - name: PEERS
           valueFrom:
@@ -32,7 +32,7 @@ spec:
         readinessProbe:
           httpGet:
             path: /liveness
-            port: 5000
+            port: 5001
           initialDelaySeconds: 5  # Delay before the probe starts
           periodSeconds: 10       # Frequency of the probe
           timeoutSeconds: 5       # Timeout for each probe
