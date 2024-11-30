@@ -1,18 +1,17 @@
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
-  name: database-server
-  namespace: database
+  name: auction-service
+  namespace: auction-service
 spec:
-  replicas: 3
-  serviceName: database-server
+  replicas: 2
   selector:
     matchLabels:
-      app: database-server
+      app: auction-service
   template:
     metadata:
       labels:
-        app: database-server
+        app: auction-service
     spec:
       affinity:
         podAntiAffinity:
@@ -22,27 +21,17 @@ spec:
                   - key: app
                     operator: In
                     values:
-                      - database-server
+                      - auction-service
               topologyKey: "kubernetes.io/hostname"
       containers:
-      - name: database-server
-        image: chandrakanthchalla11/database-image:v3.0.5
+      - name: auction-service
+        image: chandrakanthchalla11/auction-service:v0.0.4
         ports:
-        - containerPort: 5001
-        env:
-        - name: PEERS
-          valueFrom:
-            configMapKeyRef:
-              name: database-server-config
-              key: servers
-        - name: MY_POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
+        - containerPort: 5000
         readinessProbe:
           httpGet:
             path: /liveness
-            port: 5001
+            port: 5000
           initialDelaySeconds: 5  # Delay before the probe starts
           periodSeconds: 10       # Frequency of the probe
           timeoutSeconds: 5       # Timeout for each probe

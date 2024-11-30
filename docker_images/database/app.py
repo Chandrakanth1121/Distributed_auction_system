@@ -13,11 +13,9 @@ app = Flask(__name__)
 
 import logging
 
-# Set up basic logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration
 SERVER_ID = os.getenv("MY_POD_NAME")
 PEERS = os.getenv("PEERS").split(",")
 SERVER_IP = socket.gethostbyname(socket.gethostname())
@@ -25,25 +23,23 @@ SERVER_IP = socket.gethostbyname(socket.gethostname())
 leader_election = LeaderElection(PEERS, start_time)
 database = Database(PEERS)
 
-heartbeat_timeout = 15  # Timeout for heartbeat (in seconds)
-write_in_progress = False  # Flag for write operation status
-read_retry_timeout = 30  # Time limit for retrying read requests
+heartbeat_timeout = 15
+write_in_progress = False
+read_retry_timeout = 30
 
 last_heartbeat = time.time()
 
-# Synchronize with leader during startup
 leader_ip = leader_election.get_leader(start_time)
 while not leader_ip:
     print("waiting for leader election")
     time.sleep(2)
 
 if leader_ip != SERVER_IP:
-    logger.info(f"Synchronizing data with leader {leader_ip}...")
+    logger.info(f"Synchronizing data with leader {leader_ip}...\n")
     database.synchronize_with_leader(leader_ip)
 else:
-    logger.info("No synchronization needed, this server is the leader.")
+    logger.info("No synchronization needed, this server is the leader.\n")
 
-# Periodic heartbeat from the leader
 def send_heartbeat():
     while True:
         if leader_election.get_leader(start_time) == SERVER_IP:  # Only leader sends heartbeat
@@ -52,15 +48,15 @@ def send_heartbeat():
                     try:
                         response = requests.post(f"http://{peer}.database-server.database.svc.cluster.local:5001/heartbeat", timeout=2)
                         if response.status_code == 200:
-                            logger.info(f"Sent heartbeat to {peer}")
+                            logger.info(f"Sent heartbeat to {peer}\n")
                     except requests.exceptions.Timeout as e:
-                        logger.info(f"Timeout while sending heartbeat to peer {peer}: {e}")
+                        logger.error(f"Timeout while sending heartbeat to peer {peer}: {e}\n")
                     except requests.exceptions.ConnectionError as e:
-                        logger.info(f"Connection error while sending heartbeat to {peer}: {e}")
+                        logger.error(f"Connection error while sending heartbeat to {peer}: {e}\n")
                     except requests.exceptions.RequestException as e:
-                        logger.info(f"Request error while sending heartbeat to peer {peer}: {e}")
+                        logger.error(f"Request error while sending heartbeat to peer {peer}: {e}\n")
                     except Exception as e:
-                        logger.info(f"Unexpected error while sending heartbeat to peer {peer}: {e}")
+                        logger.error(f"Unexpected error while sending heartbeat to peer {peer}: {e}\n")
         time.sleep(5)  # Send heartbeat every 5 seconds
 
 # Start the heartbeat thread
@@ -68,17 +64,15 @@ heartbeat_thread = threading.Thread(target=send_heartbeat)
 heartbeat_thread.daemon = True
 heartbeat_thread.start()
 
-# Monitoring heartbeat in followers
 def monitor_heartbeat():
-    """Monitor the heartbeat of the leader."""
     global last_heartbeat
     last_heartbeat = time.time()
     while True:
-        if leader_election.get_leader(start_time) != SERVER_IP:  # Only follower waits for heartbeat
+        if leader_election.get_leader(start_time) != SERVER_IP:
             if time.time() - last_heartbeat > heartbeat_timeout and leader_election.get_leader(start_time) != SERVER_IP:
-                logger.info("Leader failed, starting election...")
-                leader_election.start_election(start_time)  # Trigger leader election
-        time.sleep(10)  # Check every 10 seconds for heartbeat
+                logger.info("Leader failed, starting election...\n")
+                leader_election.start_election(start_time)
+        time.sleep(10)
 
 # Start the heartbeat monitoring thread
 monitor_thread = threading.Thread(target=monitor_heartbeat)
@@ -93,7 +87,7 @@ def handle_write():
     data = request.json
     key = data["key"]
     value = data["value"]
-    db_type = data["db_type"]  # Specify which database to write to: "users" or "bids"
+    db_type = data["db_type"]
 
     if leader_ip != SERVER_IP:
         try:
@@ -105,10 +99,8 @@ def handle_write():
             response.raise_for_status()
             return response.json(), response.status_code
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to forward write to leader {leader_ip}: {e}")
+            logger.error(f"Failed to forward write to leader {leader_ip}: {e}\n")
             return jsonify({"error": "Failed to forward write request to the leader"}), 500
-
-    # Begin write operation if this node is the leader
     write_in_progress = True
     database.write_record(key, value, leader_ip, db_type)
     write_in_progress = False
@@ -135,7 +127,7 @@ def add_user():
             response.raise_for_status()
             return response.json(), response.status_code
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to forward add_user request to leader {leader_ip}: {e}")
+            logger.error(f"Failed to forward add_user request to leader {leader_ip}: {e}\n")
             return jsonify({"error": "Failed to forward request to the leader"}), 500
     
     # Handle user creation if this is the leader
@@ -165,7 +157,7 @@ def handle_read(db_type, key):
                         return jsonify({"error": "Record not found"}), 404
                     return jsonify({"key": key, "value": value}), 200
         except requests.exceptions.RequestException as e:
-            logger.info(f"Failed to contact leader: {e}")
+            logger.error(f"Failed to contact leader: {e}\n")
         time.sleep(2)
 
     return jsonify({"error": "Read request timed out"}), 503
@@ -191,7 +183,7 @@ def authenticate_user():
                         return jsonify({"message": "Authentication successful."}), 200
                     return jsonify({"error": "Invalid username or password."}), 401
         except requests.exceptions.RequestException as e:
-            logger.info(f"Failed to contact leader: {e}")
+            logger.error(f"Failed to contact leader: {e}\n")
         time.sleep(2)
     return jsonify({"error": "Authentication request timed out"}), 503
 
@@ -209,25 +201,23 @@ def handle_replication():
 @app.route('/new_leader', methods=['POST'])
 def handle_new_leader():
     new_leader_ip = request.json.get("leader_ip")
-    logger.info(f"New leader elected: {new_leader_ip}")
+    logger.info(f"New leader elected: {new_leader_ip}\n")
     leader_election.leader_ip = new_leader_ip
     return jsonify({"message": "Leader update received"}), 200
 
 @app.route('/heartbeat', methods=['POST'])
 def handle_heartbeat():
-    """Leader sends a heartbeat. Follower acknowledges."""
     global last_heartbeat
-    last_heartbeat = time.time()  # Update the last heartbeat timestamp
+    last_heartbeat = time.time()
     return jsonify({"message": "Heartbeat received"}), 200
 
 @app.route('/lock_status', methods=['GET'])
 def handle_lock_status():
-    """Return the leader's lock status."""
     return jsonify({"write_in_progress": write_in_progress}), 200
 
 @app.route('/election', methods=['GET'])
 def handle_election():
-    logger.info("Election endpoint hit")
+    logger.info("Election endpoint hit\n")
     uptime = time.time() - start_time
     return jsonify({"ip": SERVER_IP, "uptime": uptime}), 200
 

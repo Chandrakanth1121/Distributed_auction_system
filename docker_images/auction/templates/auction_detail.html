@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>{{ auction.title }}</h2>
+<p>{{ auction.description }}</p>
+<p>Starting Bid: ${{ auction.starting_bid }}</p>
+<p>Current Highest Bid: ${{ auction.highest_bid }}</p>
+{% if auction.highest_bidder %}
+<p>Highest Bidder: {{ auction.highest_bidder }}</p>
+{% endif %}
+<form method="post" action="{{ url_for('bid', auction_id=auction_id) }}">
+    <label for="bid_amount">Your Bid:</label>
+    <input type="number" name="bid_amount" min="{{ auction.highest_bid + 1 }}" step="1" required>
+    <button type="submit">Place Bid</button>
+</form>
+
+<a href="{{ url_for('home') }}">Back to Auctions</a>
+{% endblock %}
+

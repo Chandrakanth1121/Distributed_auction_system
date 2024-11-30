@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Create Auction</h2>
+<form method="post">
+    <label for="title">Title:</label>
+    <input type="text" name="title" required>
+    <label for="description">Description:</label>
+    <textarea name="description" required></textarea>
+    <label for="starting_bid">Starting Bid:</label>
+    <input type="number" name="starting_bid" required>
+    <button type="submit">Create Auction</button>
+</form>
+{% endblock %}
+
